@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Minimap Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.0/dist/vis-network.min.js"></script>
+  <style>
+    #minimap {
+      width: 600px;
+      height: 400px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container mt-5">
+  <h1 class="text-center">Minimap Demo</h1>
+  <div id="minimap"></div>
+</div>
+
+<script>
+  // Generate random city names
+  function generateName() {
+    const vowels = 'aeiou';
+    const consonants = 'bcdfghjklmnpqrstvwxyz';
+    let name = '';
+    for (let i = 0; i < 5; i++) {
+      name += i % 2 === 0 ? consonants[Math.floor(Math.random() * consonants.length)] : vowels[Math.floor(Math.random() * vowels.length)];
+    }
+    return name;
+  }
+
+  // Create nodes
+  const nodes = [];
+  for (let i = 0; i < 10; i++) {
+    nodes.push({ id: i, label: generateName() });
+  }
+
+  // Create random edges, ensuring all nodes are connected
+  const edges = [];
+  const connectedNodes = new Set();
+  connectedNodes.add(0); // Start with the first node
+
+  while (connectedNodes.size < nodes.length) {
+    let startNode = [...connectedNodes][Math.floor(Math.random() * connectedNodes.size)];
+    let endNode;
+    do {
+      endNode = Math.floor(Math.random() * nodes.length);
+    } while (connectedNodes.has(endNode) || startNode === endNode);
+
+    edges.push({ from: startNode, to: endNode });
+    connectedNodes.add(endNode);
+  }
+
+  // Create the network
+  const container = document.getElementById('minimap');
+  const data = {
+    nodes: new vis.DataSet(nodes),
+    edges: new vis.DataSet(edges)
+  };
+  const options = {};
+  const network = new vis.Network(container, data, options);
+
+  // Handle node selection and path highlighting
+  let selectedNode = null;
+  network.on('click', function (params) {
+    if (params.nodes.length > 0) {
+      const clickedNode = params.nodes[0];
+
+      if (selectedNode === null) {
+        selectedNode = clickedNode;
+      } else {
+        // Find and highlight the shortest path
+        const path = findShortestPath(selectedNode, clickedNode);
+        highlightPath(path);
+        selectedNode = null; // Reset selection
+      }
+    }
+  });
+
+  // Dijkstra's algorithm for shortest path
+  function findShortestPath(startNode, endNode) {
+    const distances = {};
+    const previous = {};
+    const queue = [];
+
+    // Initialization
+    for (let i = 0; i < nodes.length; i++) {
+      distances[i] = Infinity;
+      previous[i] = null;
+      queue.push(i);
+    }
+    distances[startNode] = 0;
+
+    while (queue.length > 0) {
+      // Find node with smallest distance
+      let minDistance = Infinity;
+      let currentNode = null;
+      for (const node of queue) {
+        if (distances[node] < minDistance) {
+          minDistance = distances[node];
+          currentNode = node;
+        }
+      }
+      queue.splice(queue.indexOf(currentNode), 1);
+
+      // Update distances to neighbors
+      const neighbors = network.getConnectedNodes(currentNode);
+      for (const neighbor of neighbors) {
+        const newDistance = distances[currentNode] + 1; // Assuming edge weight is 1
+        if (newDistance < distances[neighbor]) {
+          distances[neighbor] = newDistance;
+          previous[neighbor] = currentNode;
+        }
+      }
+    }
+
+    // Construct the path
+    const path = [];
+    let current = endNode;
+    while (current !== null) {
+      path.unshift(current);
+      current = previous[current];
+    }
+    return path;
+  }
+
+  // Highlight the path
+  function highlightPath(path) {
+    const edgesToHighlight = [];
+    for (let i = 0; i < path.length - 1; i++) {
+      // Find the edge connecting path[i] and path[i + 1]
+      const connectedEdges = network.getConnectedEdges(path[i]);
+      const edge = connectedEdges.find(edgeId => {
+        const edgeData = data.edges.get(edgeId);
+        return (edgeData.from === path[i] && edgeData.to === path[i + 1]) ||
+               (edgeData.from === path[i + 1] && edgeData.to === path[i]);
+      });
+
+      if (edge) {
+        edgesToHighlight.push({ id: edge, width: 5, color: 'lightblue' });
+      }
+    }
+    data.edges.update(edgesToHighlight);
+
+    // Reset edge styles after a short delay
+    setTimeout(() => {
+      data.edges.update(edgesToHighlight.map(edge => ({ id: edge.id, width: 1, color: '#97C2FC' })));
+    }, 1000);
+  }
+</script>
+
+</body>
+</html>
